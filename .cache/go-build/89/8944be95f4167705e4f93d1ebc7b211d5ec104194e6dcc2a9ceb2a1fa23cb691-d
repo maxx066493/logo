@@ -1,0 +1,4 @@
+./avs_registry_contracts_client.go
+./bindings.go
+./el_contracts_client.go
+./erc20_contract_client.go

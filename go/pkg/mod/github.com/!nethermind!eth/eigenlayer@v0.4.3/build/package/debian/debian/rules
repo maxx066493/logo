@@ -1,0 +1,30 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+export GOPATH=$(CURDIR)
+export HOME=$(CURDIR)
+export DEB_BUILD_MAINT_OPTIONS = noautodbgsym
+PKGDIR=debian/eigenlayer
+
+%:
+	dh $@ 
+
+clean:
+	dh_clean
+	rm -rf $(GOPATH)/bin/* $(GOPATH)/pkg/*
+	rm -f $(GOPATH)/goinstall.log
+
+binary-arch: clean
+	dh_prep
+	dh_installdirs
+	mkdir -p $(PKGDIR)/usr/bin
+	go build -o $(PKGDIR)/usr/bin/eigenlayer $(GOPATH)/src/github.com/NethermindEth/eigenlayer/cmd/eigenlayer/main.go
+	dh_strip --no-automatic-dbgsym
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-arch

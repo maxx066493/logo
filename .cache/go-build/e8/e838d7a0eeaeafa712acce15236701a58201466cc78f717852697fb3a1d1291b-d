@@ -1,0 +1,6 @@
+./config.go
+./error.go
+./keys.go
+./register.go
+./status.go
+./update.go

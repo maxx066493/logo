@@ -1,0 +1,11 @@
+./backup.go
+./compose.go
+./daemon.go
+./doc.go
+./docker.go
+./egn_daemon.go
+./error.go
+./gen.go
+./monitoring.go
+./option.go
+./util.go

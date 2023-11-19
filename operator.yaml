@@ -1,0 +1,13 @@
+operator:
+    address: 0x576b04936CE2f1b5bd0DEc87F4BCefe4EA7a9d7f
+    earnings_receiver_address: 0x576b04936CE2f1b5bd0DEc87F4BCefe4EA7a9d7f
+    delegation_approver_address: 0x88bfC1D471CFd11afEBE3f4a91c87Df8d382F1Fe
+    staker_opt_out_window_blocks: 0
+    metadata_url: ""
+el_slasher_address: ""
+bls_public_key_compendium_address: ""
+eth_rpc_url: https://eth-goerli.g.alchemy.com/v2/iAf1wkbjnTWUr046UCkR0j7Zo4hZJ7Qs
+private_key_store_path: ead8f3fe320661008ec34dc9cbbba77cafa12389dd8210e9a6dcd5283e76cbe9
+signer_type: local_keystore
+bls_private_key_store_path: "5696284573903823517103892707153843815646780054016280408335785123851995139691"
+chain_id: 5

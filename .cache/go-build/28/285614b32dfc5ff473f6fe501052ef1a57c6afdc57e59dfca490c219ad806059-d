@@ -1,0 +1,5 @@
+./avs.go
+./constants.go
+./operator.go
+./operator_metadata.go
+./test.go

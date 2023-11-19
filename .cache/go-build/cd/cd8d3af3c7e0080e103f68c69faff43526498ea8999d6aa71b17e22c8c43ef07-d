@@ -1,0 +1,5 @@
+./error.go
+./manifest.go
+./package.go
+./schema.go
+./utils.go

@@ -1,0 +1,4 @@
+./aggregation.go
+./attestation.go
+./data.go
+./state.go

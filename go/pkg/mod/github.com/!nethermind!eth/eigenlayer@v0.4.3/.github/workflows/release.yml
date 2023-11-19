@@ -1,0 +1,195 @@
+name: Release eigenlayer
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The version number (e.g. v1.2.3) of the release you want to push
+        required: true
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  eigenlayer-linux:
+    name: Build eigenlayer
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        go: ["1.21"]
+    runs-on: ${{ matrix.os }}
+    env:
+      VERSION: ${{ github.event.inputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.go }}
+      - name: Install dependencies
+        run: make install-deps
+      - name: Generate mocks
+        run: make generate
+      - name: Check go mod status
+        run: |
+          make gomod_tidy
+          if [[ ! -z $(git status -s | grep 'go.mod') ]] || [[ ! -z $(git status -s | grep 'go.sum') ]];
+          then
+            echo "Changes on go.mod or go.sum files - state is not clean:"
+            git status -s
+            git diff "$GITHUB_SHA"
+            exit 1
+          fi
+        shell: bash
+      - name: Unit tests
+        run: make unit-test
+# These tests were only running for install and monitoring so commenting for now
+#      - name: E2E tests
+#        run: make e2e-test
+      - name: Build linux amd64
+        run: make build-linux-amd64
+      - name: Build linux arm64
+        run: make build-linux-arm64
+      - name: Upload eigenlayer-linux-amd64
+        uses: actions/upload-artifact@v3
+        with:
+          name: eigenlayer-${{env.VERSION}}-linux-amd64
+          path: bin/eigenlayer-linux-amd64
+      - name: Upload eigenlayer-linux-arm64
+        uses: actions/upload-artifact@v3
+        with:
+          name: eigenlayer-${{env.VERSION}}-linux-arm64
+          path: bin/eigenlayer-linux-arm64
+  eigenlayer-ubuntu-20-04:
+    name: Build eigenlayer
+    strategy:
+      matrix:
+        os: [ ubuntu-20.04 ]
+        go: [ "1.21" ]
+    runs-on: ${{ matrix.os }}
+    env:
+      VERSION: ${{ github.event.inputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.go }}
+      - name: Install dependencies
+        run: make install-deps
+      - name: Generate mocks
+        run: make generate
+      - name: Check go mod status
+        run: |
+          make gomod_tidy
+          if [[ ! -z $(git status -s | grep 'go.mod') ]] || [[ ! -z $(git status -s | grep 'go.sum') ]];
+          then
+            echo "Changes on go.mod or go.sum files - state is not clean:"
+            git status -s
+            git diff "$GITHUB_SHA"
+            exit 1
+          fi
+        shell: bash
+      - name: Unit tests
+        run: make unit-test
+      # These tests were only running for install and monitoring so commenting for now
+      #      - name: E2E tests
+      #        run: make e2e-test
+      - name: Build linux amd64
+        run: make build-linux-amd64 && mv bin/eigenlayer-linux-amd64 bin/eigenlayer-linux-amd64-ubuntu-20-04
+      - name: Build linux arm64
+        run: make build-linux-arm64 && mv bin/eigenlayer-linux-arm64 bin/eigenlayer-linux-arm64-ubuntu-20-04
+      - name: Upload eigenlayer-linux-amd64
+        uses: actions/upload-artifact@v3
+        with:
+          name: eigenlayer-${{env.VERSION}}-linux-amd64-ubuntu-20-04
+          path: bin/eigenlayer-linux-amd64-ubuntu-20-04
+      - name: Upload eigenlayer-linux-arm64
+        uses: actions/upload-artifact@v3
+        with:
+          name: eigenlayer-${{env.VERSION}}-linux-arm64-ubuntu-20-04
+          path: bin/eigenlayer-linux-arm64-ubuntu-20-04
+  publish-github:
+    name: Pre-release eigenlayer and upload binaries to GitHub
+    needs: [ eigenlayer-linux, eigenlayer-ubuntu-20-04]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ github.event.inputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: /tmp/artifacts
+      - name: Generate changelog 
+        run: awk '/## \[v[0-9]+\.[0-9]+\.[0-9]+\]/ {if (flag) exit; flag=1} flag' CHANGELOG.md > /tmp/changelog
+      - name: Create pre-release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: /tmp/artifacts/eigenlayer-*/*
+          bodyFile: /tmp/changelog
+          draft: true
+          tag: ${{ github.event.inputs.tag }}
+          name: ${{ github.event.inputs.tag }}
+
+  publish-ppa:
+    name: "Publishing eigenlayer to PPA repository"
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ github.event.inputs.tag }}
+      PPA_GPG_KEYID: ${{ secrets.PPA_GPG_KEYID }}
+    needs: publish-github
+    steps:
+      - run: echo "$GPG_SECRET_KEY" > /tmp/SECRET_KEY
+        shell: bash
+        env:
+          GPG_SECRET_KEY: ${{secrets.PPA_GPG_SECRET_KEY}}
+      - run: echo "$GPG_PASSPHRASE" | base64 -d > /tmp/PASSPHRASE
+        shell: bash
+        env:
+          GPG_PASSPHRASE: ${{secrets.PPA_GPG_PASSPHRASE}}
+      - name: Import GPG key
+        run: base64 --decode -i /tmp/SECRET_KEY | gpg --import --no-tty --batch --yes
+      - name: Import GPG Owner Trust
+        run: echo ${{secrets.GPG_OWNERTRUST}} | base64 --decode | gpg --import-ownertrust
+      - name: Install dependencies for PPA
+        run: |
+          sudo apt update && sudo apt install golang-go debhelper libdebhelper-perl build-essential devscripts rsync -y
+      - name: Checking out Eigenlayer repository
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+          path: eigenlayer
+      - uses: actions/setup-go@v3
+        with:
+          go-version: "1.21.0"
+      - name: Run publish PPA script
+        env:
+          GOPATH: /home/runner/go
+        run: |
+          cd /home/runner/work/eigenlayer/eigenlayer/eigenlayer
+          chmod +x scripts/publish-ppa.sh
+          ./scripts/publish-ppa.sh
+      - name: Sleep for 1 hour
+        run: sleep 3600s
+        shell: bash
+      - uses: actions/setup-python@v4
+      - run: pip install launchpadlib --upgrade
+      - name: Run copy binaries PPA script
+        env:
+          LP_CREDENTIALS_FILE: /tmp/credentials.txt
+        run: |
+          echo ${{secrets.PPA_COPY_TOKEN}} | base64 --decode > /tmp/credentials.txt
+          cd /home/runner/work/eigenlayer/eigenlayer/eigenlayer
+          chmod +x scripts/copy-ppa-packages-to-new-series.sh
+          ./scripts/copy-ppa-packages-to-new-series.sh
